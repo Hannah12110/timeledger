@@ -5,6 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
+      // 这里的 base 必须与你的 GitHub 仓库名一致
+      base: '/timeledger/', 
       server: {
         port: 3000,
         host: '0.0.0.0',
