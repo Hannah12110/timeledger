@@ -1,13 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { Button } from '../../components/Button';
 import { useStore } from '../../store/useStore';
-import { Category, TimePreset } from '../../types';
+import { TimePreset } from '../../types';
 
-type ProfileView = 'main' | 'categories' | 'presets' | 'export' | 'edit-category' | 'edit-preset';
+type ProfileView = 'main' | 'presets' | 'export' | 'edit-preset';
 
 export const ProfilePage: React.FC = () => {
   const [currentView, setCurrentView] = useState<ProfileView>('main');
-  const [editingCategory, setEditingCategory] = useState<any>(null);
   const [editingPreset, setEditingPreset] = useState<Partial<TimePreset> | null>(null);
 
   const navigateTo = (view: ProfileView) => setCurrentView(view);
@@ -15,12 +13,6 @@ export const ProfilePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FB]">
       {currentView === 'main' && <MainProfileView onNavigate={navigateTo} />}
-      {currentView === 'categories' && (
-        <CategoryManagementView 
-          onBack={() => navigateTo('main')} 
-          onEdit={(cat) => { setEditingCategory(cat); navigateTo('edit-category'); }} 
-        />
-      )}
       {currentView === 'presets' && (
         <FixedDurationPresetsView 
           onBack={() => navigateTo('main')} 
@@ -28,12 +20,6 @@ export const ProfilePage: React.FC = () => {
         />
       )}
       {currentView === 'export' && <ExportDataView onBack={() => navigateTo('main')} />}
-      {currentView === 'edit-category' && (
-        <EditCategoryView 
-          category={editingCategory} 
-          onBack={() => navigateTo('categories')} 
-        />
-      )}
       {currentView === 'edit-preset' && (
         <EditPresetModal
           preset={editingPreset!}
@@ -45,10 +31,14 @@ export const ProfilePage: React.FC = () => {
 };
 
 const MainProfileView = ({ onNavigate }: { onNavigate: (v: ProfileView) => void }) => {
-  const { user, updateUser } = useStore();
+  const { user, updateUser, logout, isLoggedIn } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState(user?.name || '');
 
   const handleAvatarClick = () => {
+    if (!isLoggedIn) return; // 未登录时不允许修改头像
     fileInputRef.current?.click();
   };
 
@@ -58,9 +48,22 @@ const MainProfileView = ({ onNavigate }: { onNavigate: (v: ProfileView) => void 
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64String = reader.result as string;
-        updateUser({ ...user, avatar: base64String });
+        updateUser({ avatar: base64String });
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveName = () => {
+    if (tempName.trim()) {
+      updateUser({ name: tempName.trim() });
+      setIsEditingName(false);
+    }
+  };
+
+  const handleLogout = () => {
+    if (confirm('确定要退出登录吗？')) {
+      logout();
     }
   };
 
@@ -72,16 +75,18 @@ const MainProfileView = ({ onNavigate }: { onNavigate: (v: ProfileView) => void 
         <div className="mt-8 flex flex-col items-center">
           <div 
             onClick={handleAvatarClick}
-            className="w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-sm mb-4 cursor-pointer relative group active:scale-95 transition-transform"
+            className={`w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-sm mb-4 relative group transition-transform ${isLoggedIn ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
           >
             <img 
               src={user?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} 
               alt="Avatar" 
               className="w-full h-full bg-blue-50 object-cover" 
             />
-            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-              <i className="fas fa-camera text-white text-xs"></i>
-            </div>
+            {isLoggedIn && (
+              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <i className="fas fa-camera text-white text-xs"></i>
+              </div>
+            )}
           </div>
           <input 
             type="file" 
@@ -90,36 +95,93 @@ const MainProfileView = ({ onNavigate }: { onNavigate: (v: ProfileView) => void 
             accept="image/*" 
             className="hidden" 
           />
-          <h2 className="text-xl font-bold text-gray-900">{user?.name || '用户名'}</h2>
-          <p className="text-gray-400 text-xs mt-1">ID: {user?.id || '1234567'}</p>
+          
+          {/* 昵称编辑功能 - 仅登录后可用 */}
+          {isLoggedIn ? (
+            isEditingName ? (
+              <div className="flex items-center gap-2 mb-1">
+                <input
+                  type="text"
+                  value={tempName}
+                  onChange={(e) => setTempName(e.target.value)}
+                  className="bg-gray-50 border-none rounded-xl px-3 py-1 text-lg font-bold text-gray-900 text-center focus:ring-2 focus:ring-blue-500 w-40"
+                  autoFocus
+                />
+                <button onClick={handleSaveName} className="text-blue-500 text-sm font-bold">
+                  <i className="fas fa-check"></i>
+                </button>
+                <button onClick={() => setIsEditingName(false)} className="text-gray-400 text-sm font-bold">
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-xl font-bold text-gray-900">{user?.name || '用户名'}</h2>
+                <button 
+                  onClick={() => setIsEditingName(true)}
+                  className="text-blue-500 text-sm"
+                >
+                  <i className="fas fa-edit"></i>
+                </button>
+              </div>
+            )
+          ) : (
+            <h2 className="text-xl font-bold text-gray-900 mb-1">{user?.name || '未登录'}</h2>
+          )}
+          
+          {/* 邮箱显示 - 仅登录后显示 */}
+          {isLoggedIn && user?.email && (
+            <p className="text-gray-400 text-xs font-bold mb-1">{user.email}</p>
+          )}
+          
+          <p className="text-gray-400 text-xs mt-1">ID: {user?.id || '未登录'}</p>
         </div>
       </header>
 
       <div className="px-6 mt-6 space-y-4">
-        <section className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-50">
-          <MenuItem 
-            icon="fa-stopwatch" 
-            label="固定时长预设" 
-            subLabel="管理睡眠、用餐及自定义预设" 
-            color="bg-orange-500" 
-            onClick={() => onNavigate('presets')} 
-          />
-        </section>
+        {/* 仅登录后显示功能板块 */}
+        {isLoggedIn && (
+          <>
+            <section className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-50">
+              <MenuItem 
+                icon="fa-stopwatch" 
+                label="固定时长预设" 
+                subLabel="管理睡眠、用餐及自定义预设" 
+                color="bg-orange-500" 
+                onClick={() => onNavigate('presets')} 
+              />
+            </section>
 
-        <section className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-50">
-          <div className="text-[10px] font-bold text-gray-300 uppercase px-6 pt-4 tracking-widest">数据中心</div>
-          <MenuItem 
-            icon="fa-file-export" 
-            label="导出数据" 
-            color="bg-green-500" 
-            onClick={() => onNavigate('export')} 
-          />
-        </section>
+            <section className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-50">
+              <div className="text-[10px] font-bold text-gray-300 uppercase px-6 pt-4 tracking-widest">数据中心</div>
+              <MenuItem 
+                icon="fa-file-export" 
+                label="导出数据" 
+                color="bg-green-500" 
+                onClick={() => onNavigate('export')} 
+              />
+            </section>
+          </>
+        )}
 
+        {/* 登录/退出按钮 */}
         <div className="mt-8">
-          <button className="w-full py-5 text-rose-500 font-bold bg-white rounded-3xl shadow-sm border border-gray-50 active:scale-95 transition-all">
-            退出登录
-          </button>
+          {isLoggedIn ? (
+            <button 
+              onClick={handleLogout}
+              className="w-full py-5 text-rose-500 font-bold bg-white rounded-3xl shadow-sm border border-gray-50 active:scale-95 transition-all"
+            >
+              <i className="fas fa-sign-out-alt mr-2"></i>
+              退出登录
+            </button>
+          ) : (
+            <button 
+              className="w-full py-5 text-blue-500 font-bold bg-white rounded-3xl shadow-sm border border-gray-50 active:scale-95 transition-all"
+            >
+              <i className="fas fa-sign-in-alt mr-2"></i>
+              立即登录
+            </button>
+          )}
         </div>
         
         <p className="text-center text-gray-300 text-[10px] mt-8 font-medium">时光账本 v1.2.4</p>
@@ -245,7 +307,7 @@ const EditPresetModal = ({ preset, onBack }: { preset: Partial<TimePreset>, onBa
           <div>
             <label className="text-[10px] font-bold text-gray-300 uppercase block mb-2 px-1">所属分类</label>
             <div className="bg-gray-50 rounded-2xl p-2 flex gap-2">
-              {(['投资', '维持', '损耗'] as Category[]).map(cat => (
+              {(['投资', '维持', '损耗'] as const).map(cat => (
                 <button 
                   key={cat}
                   onClick={() => setFormData({ ...formData, category: cat })}
@@ -276,23 +338,20 @@ const ExportDataView = ({ onBack }: { onBack: () => void }) => {
 
   const handleGenerate = async () => {
     setIsGenerating(true);
-    // Simulate generation
     await new Promise(resolve => setTimeout(resolve, 1500));
     setIsGenerating(false);
 
-    // Simulated Web Share API logic
     if (navigator.share) {
       try {
         await navigator.share({
           title: '时光账本数据导出',
           text: `这是我在 ${exportRange === 'selected' ? `${startDate}至${endDate}` : '全部'} 期间的时间账本记录。`,
-          url: window.location.href, // Mocking a download link
+          url: window.location.href,
         });
       } catch (err) {
         console.log('Share cancelled or failed', err);
       }
     } else {
-      // Fallback for WeChat simulation
       const shareOverlay = document.createElement('div');
       shareOverlay.className = "fixed inset-0 bg-black/80 z-[200] flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-300";
       shareOverlay.innerHTML = `
@@ -447,112 +506,3 @@ const MenuItem = ({ icon, label, subLabel, color, onClick }: any) => (
     <i className="fas fa-chevron-right text-gray-200 text-sm group-hover:translate-x-1 transition-transform"></i>
   </button>
 );
-
-const CategoryManagementView = ({ onBack, onEdit }: { onBack: () => void, onEdit: (cat: any) => void }) => {
-  const [filter, setFilter] = useState('全部');
-  const mockCategories = [
-    { name: '深度工作', attr: '投资', color: '#10B981' },
-    { name: '体育锻炼', attr: '投资', color: '#3B82F6' },
-    { name: '社交媒体', attr: '损耗', color: '#EF4444' },
-    { name: '拖延/发呆', attr: '损耗', color: '#F59E0B' },
-    { name: '基础睡眠', attr: '维持', color: '#6B7280' },
-  ];
-
-  return (
-    <div className="flex flex-col h-screen bg-white">
-      <header className="px-6 py-4 flex items-center justify-between border-b border-gray-50">
-        <button onClick={onBack} className="text-blue-500"><i className="fas fa-chevron-left"></i> 返回</button>
-        <h1 className="font-bold text-gray-800">分类管理</h1>
-        <button className="text-blue-500 text-xl"><i className="fas fa-plus-circle"></i></button>
-      </header>
-      <div className="px-6 py-4 flex gap-2">
-        {['全部', '投资', '损耗', '维持'].map(f => (
-          <button 
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${filter === f ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400'}`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
-      <div className="flex-1 overflow-y-auto px-6 space-y-3 pb-24">
-        {mockCategories.filter(c => filter === '全部' || c.attr === filter).map((cat, i) => (
-          <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }}></div>
-              <div>
-                <div className="font-bold text-gray-800">{cat.name}</div>
-                <div className="text-[10px] text-gray-400 font-bold">属性: <span className={cat.attr === '投资' ? 'text-green-500' : cat.attr === '损耗' ? 'text-rose-500' : 'text-blue-400'}>+{cat.attr}</span></div>
-              </div>
-            </div>
-            <button onClick={() => onEdit(cat)} className="text-gray-300"><i className="fas fa-pen text-sm"></i></button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const EditCategoryView = ({ category, onBack }: { category: any, onBack: () => void }) => {
-  const [isDeleting, setIsDeleting] = useState(false);
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-      <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl relative overflow-hidden">
-        {isDeleting && (
-          <div className="absolute inset-0 bg-white/95 z-20 flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-200">
-             <h3 className="text-lg font-black text-gray-900 mb-2">确认删除？</h3>
-             <p className="text-xs text-gray-400 mb-8 leading-relaxed">删除后，时间轴上该分类的记录将变为未分类。此操作无法撤销。</p>
-             <div className="flex w-full gap-4">
-               <button onClick={() => setIsDeleting(false)} className="flex-1 py-4 rounded-2xl bg-gray-50 text-blue-500 font-bold">取消</button>
-               <button onClick={onBack} className="flex-1 py-4 rounded-2xl bg-rose-50 text-rose-500 font-bold">删除</button>
-             </div>
-          </div>
-        )}
-        <div className="flex justify-between items-center mb-10">
-          <button onClick={onBack} className="text-gray-300 font-bold">取消</button>
-          <h2 className="font-black text-gray-900">编辑分类</h2>
-          <div className="w-8"></div>
-        </div>
-        <div className="space-y-8 text-left">
-          <div>
-            <label className="text-[10px] font-bold text-gray-300 uppercase block mb-3 px-1">分类名称</label>
-            <input 
-              type="text" 
-              defaultValue={category?.name || "社交媒体"}
-              className="w-full bg-gray-50 border-none rounded-2xl p-4 font-bold text-gray-800 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-          <div>
-            <label className="text-[10px] font-bold text-gray-300 uppercase block mb-3 px-1">属性</label>
-            <div className="bg-gray-50 rounded-2xl p-2 flex">
-              {['投资', '损耗', '维持'].map(a => (
-                <button key={a} className={`flex-1 py-2 rounded-xl text-xs font-bold ${a === category?.attr ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>
-                  {a}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="text-[10px] font-bold text-gray-300 uppercase block mb-3 px-1">标识色</label>
-            <div className="grid grid-cols-6 gap-3">
-              {['#10B981', '#3B82F6', '#EF4444', '#F59E0B', '#8B5CF6', '#6B7280'].map(c => (
-                <div key={c} className={`w-8 h-8 rounded-full cursor-pointer flex items-center justify-center border-2 ${category?.color === c ? 'border-blue-500' : 'border-transparent'}`}>
-                  <div className="w-5 h-5 rounded-full" style={{ backgroundColor: c }}></div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="pt-4 space-y-3">
-            <button onClick={onBack} className="w-full py-5 bg-blue-600 text-white font-black rounded-[2rem] shadow-xl shadow-blue-100 active:scale-95 transition-all">
-              保存
-            </button>
-            <button onClick={() => setIsDeleting(true)} className="w-full py-5 bg-rose-50 text-rose-500 font-bold rounded-[2rem] active:scale-95 transition-all">
-              删除分类
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};

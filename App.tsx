@@ -1,13 +1,19 @@
-
 import React from 'react';
 import { useStore } from './store/useStore';
 import { TimePage } from './pages/TimeLine/TimePage';
 import { InsightsPage } from './pages/Insights/InsightsPage';
 import { ProfilePage } from './pages/Profile/ProfilePage';
+import LoginPage from './pages/LoginPage'; // 添加这行
 
 const App: React.FC = () => {
-  const { activeMainTab, setActiveMainTab } = useStore();
+  const { activeMainTab, setActiveMainTab, isLoggedIn } = useStore(); // 添加 isLoggedIn
 
+  // 如果未登录，显示登录页
+  if (!isLoggedIn) {
+    return <LoginPage />;
+  }
+
+  // 已登录，显示主应用
   return (
     <div className="min-h-screen bg-white">
       {/* Content Area */}
